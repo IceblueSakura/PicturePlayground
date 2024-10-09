@@ -20,15 +20,12 @@ namespace ImageProcessor
 
         public IImageProcessor Translate(double offsetX, double offsetY)
         {
-            var rows = _image.Height;
-            var cols = _image.Width;
-            if (offsetX > rows || offsetY > rows)
+            if (offsetX > _image.Width || offsetY > _image.Height)
             {
                 throw new ArgumentException("偏移尺寸超过图像最大座标！");
             }
+            
 
-            var mat = new Mat(rows, cols, MatType.CV_32F, Scalar.Black); // 初始化操作的三维double矩阵，使用黑色(0)填充
-            // ?
             throw new NotImplementedException();
         }
 
