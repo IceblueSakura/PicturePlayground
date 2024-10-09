@@ -25,7 +25,6 @@ namespace ImageProcessor
                 throw new ArgumentException("偏移尺寸超过图像最大座标！");
             }
             
-
             throw new NotImplementedException();
         }
 
