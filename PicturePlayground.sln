@@ -2,6 +2,10 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageProcessor", "ImageProcessor\ImageProcessor.csproj", "{43C0AD1A-3ACF-4268-A4AD-59EA11F717B7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DemoApp", "DemoApp\DemoApp.csproj", "{2D404C53-594B-4C48-8361-FEA42814522A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageProcessorWrapper", "ImageProcessorWrapper\ImageProcessorWrapper.csproj", "{45D2A648-76D9-4AAD-89E8-46935B969F7F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +16,13 @@ Global
 		{43C0AD1A-3ACF-4268-A4AD-59EA11F717B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{43C0AD1A-3ACF-4268-A4AD-59EA11F717B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{43C0AD1A-3ACF-4268-A4AD-59EA11F717B7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D404C53-594B-4C48-8361-FEA42814522A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D404C53-594B-4C48-8361-FEA42814522A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D404C53-594B-4C48-8361-FEA42814522A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D404C53-594B-4C48-8361-FEA42814522A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45D2A648-76D9-4AAD-89E8-46935B969F7F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45D2A648-76D9-4AAD-89E8-46935B969F7F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45D2A648-76D9-4AAD-89E8-46935B969F7F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45D2A648-76D9-4AAD-89E8-46935B969F7F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
