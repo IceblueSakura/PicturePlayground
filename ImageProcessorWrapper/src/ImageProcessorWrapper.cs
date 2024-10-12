@@ -107,7 +107,7 @@ namespace ImageProcessor
             }
             finally
             {
-                bitmap.UnlockBits(bitmapData);  // 解锁Bitmap
+                bitmap.UnlockBits(bitmapData); // 解锁Bitmap
                 Marshal.FreeHGlobal(dataPtr);
             }
 
@@ -129,7 +129,7 @@ namespace ImageProcessor
             }
         }
 
-        public void Scale(double scaleX, double scaleY)
+        public ImageProcessorWrapper Scale(double scaleX, double scaleY)
         {
             if (_processorHandle == IntPtr.Zero)
             {
@@ -140,9 +140,11 @@ namespace ImageProcessor
             {
                 throw new Exception("Failed to scale image.");
             }
+
+            return this;
         }
 
-        public void CropRectangle(int startX, int startY, int width, int height)
+        public ImageProcessorWrapper CropRectangle(int startX, int startY, int width, int height)
         {
             if (_processorHandle == IntPtr.Zero)
             {
@@ -153,9 +155,11 @@ namespace ImageProcessor
             {
                 throw new Exception("Failed to crop image.");
             }
+
+            return this;
         }
 
-        public void SetRotationCenter(float centerX, float centerY)
+        public ImageProcessorWrapper SetRotationCenter(float centerX, float centerY)
         {
             if (_processorHandle == IntPtr.Zero)
             {
@@ -166,9 +170,11 @@ namespace ImageProcessor
             {
                 throw new Exception("设置旋转中心点错误");
             }
+
+            return this;
         }
 
-        public void Rotate(double angle)
+        public ImageProcessorWrapper Rotate(double angle)
         {
             if (_processorHandle == IntPtr.Zero)
             {
@@ -179,9 +185,11 @@ namespace ImageProcessor
             {
                 throw new Exception("旋转图像出错！");
             }
+
+            return this;
         }
 
-        public void Translate(double offsetX, double offsetY)
+        public ImageProcessorWrapper Translate(double offsetX, double offsetY)
         {
             if (_processorHandle == IntPtr.Zero)
             {
@@ -191,6 +199,22 @@ namespace ImageProcessor
             if (Translate(_processorHandle, offsetX, offsetY) != 0)
             {
                 throw new Exception("平移图像出错！");
+            }
+
+            return this;
+        }
+
+        public ImageProcessorWrapper Overlay(Bitmap background, Bitmap overlay, int overlayWidth, int overlayHeight)
+        {
+            return this;
+        }
+
+        public void SaveImage(string fileName)
+        {
+            using (Bitmap processedImage = this.GetProcessedImage())
+            {
+                processedImage.Save(fileName);
+                Console.WriteLine($"Image saved to {fileName}");
             }
         }
 
