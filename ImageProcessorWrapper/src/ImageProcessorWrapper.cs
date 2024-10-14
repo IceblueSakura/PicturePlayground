@@ -204,9 +204,23 @@ namespace ImageProcessor
             return this;
         }
 
-        public ImageProcessorWrapper Overlay(Bitmap background, Bitmap overlay, int overlayWidth, int overlayHeight)
+        public static Bitmap Overlay(Bitmap background, Bitmap overlay, int x, int y)
         {
-            return this;
+            if (overlay.Width > background.Width || overlay.Height > background.Height)
+            {
+                throw new ArgumentException("要覆盖的图像比背景图大！请先考虑调整大小。");
+            }
+            // 创建一个新的Bitmap对象，大小与背景图像相同
+            var result = new Bitmap(background.Width, background.Height);
+
+            // 使用Graphics对象绘制背景图像
+            using (var g = Graphics.FromImage(result))
+            {
+                g.DrawImage(background, 0, 0);  // 画背景
+                g.DrawImage(overlay, x, y);  // 画覆盖图
+            }
+
+            return result;
         }
 
         public void SaveImage(string fileName)

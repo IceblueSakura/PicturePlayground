@@ -40,9 +40,8 @@ namespace ImageProcessor
                         Console.WriteLine("Overlay image...");
                         var background = new Bitmap(imagePath); // 再加载一份原图用于背景
                         var overlay = processor.GetProcessedImage(); // 获取一份变换后的图像用于覆盖
-                        processor
-                            .Overlay(background, overlay, 100, 100) // 覆盖到左上角座标为100,100的位置
-                            .SaveImage($"{outputDirectory}/overlay.bmp");
+                        Bitmap newBitmap = ImageProcessorWrapper.Overlay(background, overlay, 100, 100);
+                        bitmap.Save($"{outputDirectory}/overlay.bmp");
 
                         // 演示平移功能
                         Console.WriteLine("Translating image...");
