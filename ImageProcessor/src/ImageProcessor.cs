@@ -1,114 +1,121 @@
 using System;
+using System.Drawing;
 using OpenCvSharp;
-using Point = System.Drawing.Point;
+using OpenCvSharp.Extensions;
+using Size = OpenCvSharp.Size;
 
 namespace ImageProcessor
 {
     public class ImageProcessor : IImageProcessor
     {
-        private Image _image; // 因为会用到派生类的方法，所以在这里不能是接口
+        private Mat _image;
+        private Point2f _rotationCenter;
 
-        /// <summary>
-        /// 加载图像以创建处理器实例，以后续链式调用
-        /// </summary>
-        /// <param name="image"></param>
-        public ImageProcessor(Image image)
+        public ImageProcessor(Mat image)
         {
-            _image = image; // OOP多态
+            _image = image;
+            // ReSharper disable once PossibleLossOfFraction
+            _rotationCenter = new Point2f(image.Width / 2, image.Height / 2);
         }
 
+        public ImageProcessor(Bitmap image)
+        {
+            _image = image.ToMat();
+            _rotationCenter = new Point2f(image.Width / 2, image.Height / 2);
+        }
 
         public IImageProcessor Translate(double offsetX, double offsetY)
         {
-            if (offsetX > _image.Width || offsetY > _image.Height)
-            {
-                throw new ArgumentException("偏移尺寸超过图像最大座标！");
-            }
-            
+            // 创建一个平移矩阵
+            var translationMatrix = new Mat(2, 3, MatType.CV_64FC1);
+            translationMatrix.Set<double>(0, 0, 1);
+            translationMatrix.Set<double>(0, 1, 0);
+            translationMatrix.Set<double>(0, 2, offsetX);
+            translationMatrix.Set<double>(1, 0, 0);
+            translationMatrix.Set<double>(1, 1, 1);
+            translationMatrix.Set<double>(1, 2, offsetY);
 
-            throw new NotImplementedException();
+            // 应用仿射变换
+            var translatedImage = new Mat();
+            Cv2.WarpAffine(_image, translatedImage, translationMatrix, _image.Size(), InterpolationFlags.Linear,
+                BorderTypes.Constant, new Scalar(0));
+            _image = translatedImage; // 覆盖原本的图像
+            return this;
         }
 
-        public IImageProcessor Rotate(double angle)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor Overlay(IImage baseImage, IImage overlayImage, int x, int y)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor SmoothEdges(int radius)
-        {
-            throw new NotImplementedException();
-        }
 
         public IImageProcessor Scale(double scaleX, double scaleY)
         {
-            if (_image == null)
-            {
-                throw new InvalidOperationException("图像为空，无法缩放。");
-            }
+            // 计算缩放后的图像尺寸
+            var newWidth = _image.Width * scaleX;
+            var newHeight = _image.Height * scaleY;
 
-            // 计算缩放后的尺寸
-            var newSize = new Size(
-                (int)(scaleX * _image.Width),
-                (int)(scaleY * _image.Height));
+            // 创建一个新的Mat对象来存储缩放后的图像
+            var scaledImage = new Mat();
 
-            // 创建输出图像
-            var resizedImage = new Mat();
+            // 使用Cv2.Resize进行缩放
+            Cv2.Resize(_image, scaledImage, new Size(newWidth, newHeight),
+                interpolation: InterpolationFlags.Linear);
 
-            // 使用 OpenCvSharp 的 Resize 方法进行缩放
-            Cv2.Resize(_image.ToMat(), resizedImage, newSize);
-
-            // 返回新的图像处理器实例
-            return new ImageProcessor(resizedImage);
-        }
-
-        public IImageProcessor SetOpacity(double opacity)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor Flip(bool horizontal, bool vertical)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor Crop(int startX, int startY, int width, int height)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor ApplyFilter(Func<IImage, IImage> filter)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IImageProcessor AdjustBrightnessContrast(double brightness, double contrast)
-        {
-            throw new NotImplementedException();
+            _image = scaledImage; // 覆盖原本的图像  
+            return this;
         }
 
         public IImageProcessor SetRotationCenter(int centerX, int centerY)
         {
-            throw new NotImplementedException();
+            _rotationCenter = new Point2f(centerX, centerY);
+            return this;
         }
 
-        public IImageProcessor PerspectiveTransform(Point[] sourcePoints, Point[] destinationPoints)
+        public IImageProcessor Rotate(double angle)
         {
-            throw new NotImplementedException();
+            // 创建旋转矩阵
+            var rotationMatrix = Cv2.GetRotationMatrix2D(_rotationCenter, angle, 1.0);
+
+            // 应用旋转
+            var rotatedImage = new Mat();
+            Cv2.WarpAffine(_image, rotatedImage, rotationMatrix, _image.Size(), InterpolationFlags.Linear,
+                BorderTypes.Constant, new Scalar(0));
+            _image = rotatedImage; // 覆盖原本的图像  
+
+            return this;
         }
 
-        public IImageProcessor AdjustColor(int red, int green, int blue)
+        public IImageProcessor Overlay(Mat overlayImage, int x, int y)
         {
-            throw new NotImplementedException();
+            // 确保覆盖图像在目标图像的范围内
+            var overlayWidth = overlayImage.Width;
+            var overlayHeight = overlayImage.Height;
+
+            var startX = Math.Max(x, 0);
+            var startY = Math.Max(y, 0);
+            var endX = Math.Min(x + overlayWidth, _image.Width);
+            var endY = Math.Min(y + overlayHeight, _image.Height);
+
+            // 计算覆盖区域
+            var overlayRect = new Rect(startX, startY, endX - startX, endY - startY);
+            var targetRect = new Rect(startX - x, startY - y, endX - startX, endY - startY);
+
+            // 将覆盖图像复制到目标图像上
+            overlayImage[targetRect].CopyTo(_image[overlayRect]);
+
+            return this;
         }
 
-        public IImage Process()
+        public IImageProcessor CropRectangle(int startX, int startY, int width, int height)
         {
-            throw new NotImplementedException();
+            // 确保裁切区域在图像范围内
+            var endX = Math.Min(startX + width, _image.Width);
+            var endY = Math.Min(startY + height, _image.Height);
+
+            // 裁切图像
+            _image = new Mat(_image, new Rect(startX, startY, endX - startX, endY - startY));
+            return this;
+        }
+
+        public Bitmap GetBitmap()
+        {
+            return _image.ToBitmap();
         }
     }
 }
