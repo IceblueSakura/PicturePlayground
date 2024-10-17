@@ -87,47 +87,51 @@ namespace ImageProcessor
 
         public IImageProcessor Overlay(Mat overlayImage, int x, int y)
         {
-            // 计算起始位置，避免座标错误
+            // 计算起始位置，避免坐标错误
             var startX = Math.Max(x, 0);
             var startY = Math.Max(y, 0);
 
-            // 边界检查，如果覆盖大于背景，直接返回不做处理
+            // 边界检查
             if (startX >= _image.Width || startY >= _image.Height)
             {
                 return this;
             }
 
-            // 对overlay计算有效区域，避免覆盖后的边缘空白(空白可能由几何变幻造成)
-            var mask = new Mat(); // 二值掩摸矩阵
-            Cv2.Threshold(overlayImage, mask,
-                1, // 判断阈值，只要不是白色
-                255, // 填充颜色，作为候选区域标记
-                ThresholdTypes.Binary // 二值化分割
-            );
+            // 确保overlayImage和_image的通道数相同，确保它们都是RGB图像
+            if (overlayImage.Channels() != 3 || _image.Channels() != 3)
+            {
+                throw new InvalidOperationException("overlayImage和_image必须都是RGB图像");
+            }
 
-            // 查找轮廓
-            Point[][] contours; // 轮廓的点集
+            // 去除白色背景，生成初步掩码
+            var overlayMask = new Mat();
+            Cv2.InRange(overlayImage, new Scalar(200, 200, 200), new Scalar(255, 255, 255), overlayMask);
+
+            // 反转掩码，使非白色部分为255，白色背景为0
+            Cv2.BitwiseNot(overlayMask, overlayMask);
+
+            // 查找轮廓，获取不规则多边形
+            Point[][] contours;
             HierarchyIndex[] hierarchy;
-            Cv2.FindContours(mask, out contours, // 找到的轮廓
-                out hierarchy, // 轮廓层次信息
-                RetrievalModes.External, // 只检索最外侧轮廓
-                ContourApproximationModes.ApproxSimple // 简单轮廓近似模式
-            );
+            Cv2.FindContours(overlayMask, out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
-            // 创建一个与background相同大小的掩码
-            var overlayMask = new Mat(_image.Size(), MatType.CV_8UC1, Scalar.All(0));
+            // 创建与_image相同大小的空掩码，用于存放不规则多边形区域
+            var polygonMask = new Mat(_image.Size(), MatType.CV_8UC1, Scalar.All(0));
 
-            // 将找到的overlay轮廓绘制到掩码上，之后用于覆盖到background区域定位
-            Cv2.DrawContours(overlayMask, contours, 0, Scalar.White, -1,
-                LineTypes.AntiAlias, // 抗锯齿线条
-                null,
-                1 // 轮廓级别，1=只画最外侧线条
-            );
+            // 将轮廓绘制到空掩码上
+            Cv2.DrawContours(polygonMask, contours, -1, Scalar.White, -1); // -1表示填充轮廓
 
-            // 将overlay图像复制到background上，只覆盖抠出来的轮廓内的像素
-            overlayImage.CopyTo(_image, overlayMask);
+            // 计算overlayImage与_image的重叠区域
+            var roi = new Rect(startX, startY, 
+                Math.Min(overlayImage.Width, _image.Width - startX),
+                Math.Min(overlayImage.Height, _image.Height - startY));
+
+            // 将不规则的overlayImage按多边形掩码复制到_image上
+            overlayImage[roi].CopyTo(_image[roi], polygonMask[roi]);
+
             return this;
         }
+
 
         public IImageProcessor OverlayV2(Mat overlayImage, int x, int y)
         {
