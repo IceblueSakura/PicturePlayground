@@ -9,13 +9,13 @@ namespace ImageProcessor
         /// <summary>
         /// 将图像平移,空白处使用0填充
         /// </summary>
-        /// <param name="offsetX"></param>
-        /// <param name="offsetY"></param>
+        /// <param name="offsetX">平移的X轴像素数</param>
+        /// <param name="offsetY">平移的X轴像素数</param>
         /// <returns></returns>
         IImageProcessor Translate(double offsetX, double offsetY);
 
         /// <summary>
-        /// 缩放
+        /// 按比例缩放
         /// </summary>
         /// <param name="scaleX">X轴缩放比例</param>
         /// <param name="scaleY">Y轴缩放比例</param>
@@ -23,7 +23,7 @@ namespace ImageProcessor
         IImageProcessor Scale(double scaleX, double scaleY);
 
         /// <summary>
-        /// 设置旋转中心座标
+        /// 设置旋转中心座标，如果不设置则为图像几何中心
         /// </summary>
         /// <param name="centerX">X轴中心座标</param>
         /// <param name="centerY">Y轴中心座标</param>
@@ -31,37 +31,43 @@ namespace ImageProcessor
         IImageProcessor SetRotationCenter(int centerX, int centerY);
 
         /// <summary>
-        /// 将图像旋转特定角度
+        /// 将图像旋转特定角度，空白处使用0填充
         /// </summary>
-        /// <param name="angle"></param>
+        /// <param name="angle">旋转角度</param>
         /// <returns></returns>
         IImageProcessor Rotate(double angle);
 
         /// <summary>
-        /// 覆盖图像
+        /// 将overlayImage覆盖到当前实例中图像的指定座标，会对overlayImage取候选边距后再合并以避免操作后白色底色
         /// </summary>
         /// <param name="overlayImage"></param>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
+        /// <param name="x">在当前实例中图像(背景)的X轴座标</param>
+        /// <param name="y">在当前实例中图像(背景)的Y轴座标</param>
         /// <returns></returns>
         IImageProcessor Overlay(Mat overlayImage, int x, int y);
 
         /// <summary>
-        /// 裁切区域
+        /// 裁切一块矩形区域
         /// </summary>
-        /// <param name="startX"></param>
-        /// <param name="startY"></param>
-        /// <param name="width"></param>
-        /// <param name="height"></param>
+        /// <param name="startX">区域左上X座标</param>
+        /// <param name="startY">区域左上Y座标</param>
+        /// <param name="width">裁剪区域宽度</param>
+        /// <param name="height">裁剪区域高度</param>
         /// <returns></returns>
         IImageProcessor CropRectangle(int startX, int startY, int width, int height);
         
         /// <summary>
-        /// 获取Bitmap
+        /// 获取当前实例中保存的Bitmap形式图像
         /// </summary>
         /// <returns>处理后的图像</returns>
         Bitmap GetBitmap();
-        
+
+        /// <summary>
+        /// 获取当前实例中保存的Mat形式图像，获取时不会进行复制
+        /// </summary>
+        /// <returns></returns>
+        Mat GetMat();
+
         // /// <summary>
         // /// 平滑图像边缘
         // /// </summary>
