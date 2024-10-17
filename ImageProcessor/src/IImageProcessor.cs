@@ -39,6 +39,7 @@ namespace ImageProcessor
 
         /// <summary>
         /// 将overlayImage覆盖到当前实例中图像的指定座标，会对overlayImage取候选边距后再合并以避免操作后白色底色
+        /// 这是v1版本，使用简单矩阵算法，仅扣白色边缘，运行速度快
         /// </summary>
         /// <param name="overlayImage"></param>
         /// <param name="x">在当前实例中图像(背景)的X轴座标</param>
@@ -46,6 +47,16 @@ namespace ImageProcessor
         /// <returns></returns>
         IImageProcessor Overlay(Mat overlayImage, int x, int y);
 
+        /// <summary>
+        /// 将overlayImage覆盖到当前实例中图像的指定座标，会对overlayImage取候选边距后再合并以避免操作后白色底色
+        /// 这是v2版本，使用Canny边缘检测分割边缘，更准确，但速度慢，v1不好使再用这个
+        /// </summary>
+        /// <param name="overlayImage"></param>
+        /// <param name="x">在当前实例中图像(背景)的X轴座标</param>
+        /// <param name="y">在当前实例中图像(背景)的Y轴座标</param>
+        /// <returns></returns>
+        IImageProcessor OverlayV2(Mat overlayImage, int x, int y);
+        
         /// <summary>
         /// 裁切一块矩形区域
         /// </summary>
