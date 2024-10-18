@@ -3,244 +3,195 @@ using System.Drawing;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using Point = OpenCvSharp.Point;
-using Size = OpenCvSharp.Size;
 
 namespace ImageProcessor
 {
     public class ImageProcessor : IImageProcessor
     {
-        private Mat _image;
-        private Point2f _rotationCenter;
+        private Mat _backgroundImage;
+        private Mat _foregroundImage;
+        private Point _currentForegroundLocation;
+        private Mat _processedImage;
 
-        public ImageProcessor(Mat image)
+        public IImageProcessor LoadBackground(Mat image)
         {
-            _image = image;
-            // ReSharper disable once PossibleLossOfFraction
-            _rotationCenter = new Point2f(image.Width / 2, image.Height / 2);
-        }
-
-        public ImageProcessor(Bitmap image)
-        {
-            _image = image.ToMat();
-            _rotationCenter = new Point2f(image.Width / 2, image.Height / 2);
-        }
-
-        public IImageProcessor Translate(double offsetX, double offsetY)
-        {
-            // 创建一个平移矩阵
-            var translationMatrix = new Mat(2, 3, MatType.CV_64FC1);
-            translationMatrix.Set<double>(0, 0, 1);
-            translationMatrix.Set<double>(0, 1, 0);
-            translationMatrix.Set<double>(0, 2, offsetX);
-            translationMatrix.Set<double>(1, 0, 0);
-            translationMatrix.Set<double>(1, 1, 1);
-            translationMatrix.Set<double>(1, 2, offsetY);
-
-            // 应用仿射变换，变换时线性插值，填充常量为0(白色)
-            var translatedImage = new Mat();
-            Cv2.WarpAffine(_image, translatedImage, translationMatrix, _image.Size(), InterpolationFlags.Linear,
-                BorderTypes.Constant, new Scalar(0));
-            _image = translatedImage; // 覆盖原本的图像
+            _backgroundImage = image;
             return this;
         }
 
+        public IImageProcessor LoadBackground(Bitmap image)
+        {
+            _backgroundImage = image.ToMat();
+            return this;
+        }
+
+        public IImageProcessor LoadForeground(Mat image)
+        {
+            _foregroundImage = image;
+            return this;
+        }
+
+        public IImageProcessor LoadForeground(Bitmap image)
+        {
+            _foregroundImage = ConvertBgrToBgra(image.ToMat());
+            return this;
+        }
+
+        public IImageProcessor Overlay()
+        {
+            if (_backgroundImage == null || _foregroundImage == null)
+            {
+                throw new InvalidOperationException("Background or foreground image is not loaded.");
+            }
+
+            if (_currentForegroundLocation.X < 0 || _currentForegroundLocation.Y < 0) return this;
+            if (_processedImage != _backgroundImage) _processedImage.Dispose();
+            _processedImage = _backgroundImage.Clone();
+            if (_foregroundImage.Channels() != 3)
+            {
+                // 处理带透明度的图像的合并和降维
+                // 创建掩码，用于处理透明度
+                var mask = new Mat();
+                Cv2.CvtColor(_foregroundImage, mask, ColorConversionCodes.BGR2GRAY);
+                Cv2.Threshold(mask, mask, 0, 255, ThresholdTypes.Binary);
+                // 使用掩码将前景图覆盖到背景图上
+                _foregroundImage.CopyTo(_processedImage.SubMat(_currentForegroundLocation.Y,
+                    _currentForegroundLocation.Y + _foregroundImage.Rows,
+                    _currentForegroundLocation.X, _currentForegroundLocation.X + _foregroundImage.Cols), mask);
+                mask.Dispose();
+            }
+            else
+            {
+                _foregroundImage.CopyTo(_processedImage.SubMat(_currentForegroundLocation.Y,
+                    _currentForegroundLocation.Y + _foregroundImage.Rows,
+                    _currentForegroundLocation.X, _currentForegroundLocation.X + _foregroundImage.Cols));
+            }
+
+            return this;
+        }
+
+        public IImageProcessor Translate(int offsetX, int offsetY)
+        {
+            if (_foregroundImage == null)
+            {
+                throw new InvalidOperationException("Foreground image is not loaded.");
+            }
+
+            _currentForegroundLocation.X += offsetX;
+            _currentForegroundLocation.Y += offsetY;
+
+            // Ensure the new location does not exceed the background boundaries
+            if (_currentForegroundLocation.X < 0) _currentForegroundLocation.X = 0;
+            if (_currentForegroundLocation.Y < 0) _currentForegroundLocation.Y = 0;
+            if (_currentForegroundLocation.X + _foregroundImage.Cols > _backgroundImage.Cols)
+                _currentForegroundLocation.X = _backgroundImage.Cols - _foregroundImage.Cols;
+            if (_currentForegroundLocation.Y + _foregroundImage.Rows > _backgroundImage.Rows)
+                _currentForegroundLocation.Y = _backgroundImage.Rows - _foregroundImage.Rows;
+
+            return this;
+        }
 
         public IImageProcessor Scale(double scaleX, double scaleY)
         {
-            // 计算缩放后的图像尺寸
-            var newWidth = _image.Width * scaleX;
-            var newHeight = _image.Height * scaleY;
-
-            // 创建一个新的Mat对象来存储缩放后的图像
-            var scaledImage = new Mat();
-
-            // 使用Cv2.Resize进行缩放
-            Cv2.Resize(_image, scaledImage, new Size(newWidth, newHeight),
-                interpolation: InterpolationFlags.Linear);
-
-            _image = scaledImage; // 覆盖原本的图像  
-            return this;
-        }
-
-        public IImageProcessor SetRotationCenter(int centerX, int centerY)
-        {
-            _rotationCenter = new Point2f(centerX, centerY);
-            return this;
-        }
-
-        public IImageProcessor Rotate(double angle)
-        {
-            // 创建旋转矩阵
-            var rotationMatrix = Cv2.GetRotationMatrix2D(_rotationCenter, angle, 1.0);
-
-            // 应用旋转
-            var rotatedImage = new Mat();
-            Cv2.WarpAffine(_image, rotatedImage, rotationMatrix, _image.Size(),
-                InterpolationFlags.Linear, // 线性插值
-                BorderTypes.Constant, // 常量填充，还可以选复制填充(填充为临近值)和反射填充(填充为边界反射值)
-                new Scalar(0) // 填充的常量值，方便后续精确ROI进行覆盖
-            );
-            _image = rotatedImage; // 覆盖原本的图像  
-
-            return this;
-        }
-
-        public IImageProcessor Overlay(Mat overlayImage, int x, int y)
-        {
-            // 计算起始位置，避免坐标错误
-            var startX = Math.Max(x, 0);
-            var startY = Math.Max(y, 0);
-
-            // 边界检查
-            if (startX >= _image.Width || startY >= _image.Height)
+            if (_foregroundImage == null)
             {
-                return this;
+                throw new InvalidOperationException("Foreground image is not loaded.");
             }
 
-            // 确保overlayImage和_image的通道数相同，确保它们都是RGB图像
-            if (overlayImage.Channels() != 3 || _image.Channels() != 3)
-            {
-                throw new InvalidOperationException("overlayImage和_image必须都是RGB图像");
-            }
+            var newWidth = (int)(_foregroundImage.Cols * scaleX);
+            var newHeight = (int)(_foregroundImage.Rows * scaleY);
 
-            // 去除白色背景，生成初步掩码
-            var overlayMask = new Mat();
-            Cv2.InRange(overlayImage, new Scalar(200, 200, 200), new Scalar(255, 255, 255), overlayMask);
-
-            // 反转掩码，使非白色部分为255，白色背景为0
-            Cv2.BitwiseNot(overlayMask, overlayMask);
-
-            // 查找轮廓，获取不规则多边形
-            Point[][] contours;
-            HierarchyIndex[] hierarchy;
-            Cv2.FindContours(overlayMask, out contours, out hierarchy, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
-
-            // 创建与_image相同大小的空掩码，用于存放不规则多边形区域
-            var polygonMask = new Mat(_image.Size(), MatType.CV_8UC1, Scalar.All(0));
-
-            // 将轮廓绘制到空掩码上
-            Cv2.DrawContours(polygonMask, contours, -1, Scalar.White, -1); // -1表示填充轮廓
-
-            // 计算overlayImage与_image的重叠区域
-            var roi = new Rect(startX, startY, 
-                Math.Min(overlayImage.Width, _image.Width - startX),
-                Math.Min(overlayImage.Height, _image.Height - startY));
-
-            // 将不规则的overlayImage按多边形掩码复制到_image上
-            overlayImage[roi].CopyTo(_image[roi], polygonMask[roi]);
-
-            return this;
-        }
-
-
-        public IImageProcessor OverlayV2(Mat overlayImage, int x, int y)
-        {
-            // 计算起始位置，避免座标错误
-            var startX = Math.Max(x, 0);
-            var startY = Math.Max(y, 0);
-
-            // 边界检查，如果覆盖大于背景，直接返回不做处理
-            if (startX >= _image.Width || startY >= _image.Height)
-            {
-                return this;
-            }
-
-            // 转换HSV，方便之后分割边缘。H=色调(0-180), S=饱和度(0-255), V=明度(0-255)
-            var hsvImage = new Mat();
-            Cv2.CvtColor(overlayImage, hsvImage, ColorConversionCodes.BGR2HSV);
-
-            // 通过HSV的分布估计背景颜色，适用于背景可能不是白色的情况，HSV更适合颜色分割
-            // 计算图像的直方图
-            var hist = new Mat();
-            int[] channels = { 0, 1 }; // 使用 HS 通道
-            int[] histSize = { 32, 32 }; // 直方图的 bin 数量
-            Rangef[] ranges = { new Rangef(0, 180), new Rangef(0, 256) }; // 定义为HSV的数值范围
-            Cv2.CalcHist(new[] { hsvImage }, channels, null, hist, 2, histSize, ranges);  // 计算直方图，用于颜色统计
-
-            // 找到直方图中最大值对应的位置
-            Cv2.MinMaxLoc(hist, out _, out var maxVal, out _, out var maxLoc);
-
-            // 根据颜色分布情况，计算背景颜色的 HS 值
-            var backgroundH = (int)(maxLoc.X * (180.0 / histSize[0]));
-            var backgroundS = (int)(maxLoc.Y * (256.0 / histSize[1]));
-
-            // 定义背景颜色的 HS 范围，用于分割颜色的精度调整
-            const int hRange = 10; // 低色调(0-180，每60一个颜色，对应红绿蓝三色）
-            const int sRange = 30; // 低饱和度，灰一些的区域
-
-            // 定义背景颜色的HS范围
-            var lowerBackground = new Scalar(backgroundH - hRange, backgroundS - sRange, 0);
-            var upperBackground = new Scalar(backgroundH + hRange, backgroundS + sRange, 255);
-
-            // 创建掩码
-            var mask = new Mat();
-            Cv2.InRange(hsvImage, lowerBackground, upperBackground, mask);  // 根据颜色范围生成mask，背景=255(白)，前景=0(黑)
-
-            // 反转掩码，提取物体
-            var objectMask = new Mat();  // 颜色分割的区域
-            Cv2.BitwiseNot(mask, objectMask);
-
-            // 使用 Canny 边缘检测生成掩码
-            var edges = new Mat();  // 边缘检测分割的区域
-            Cv2.Canny(overlayImage, edges, // 根据梯度分割边缘
-                50, // 弱边缘阈值，当与强边缘连接时才保留
-                250 // 强边缘阈值，最好是弱边缘的2倍以上，这是肯定的边缘梯度阈值
-            );
-
-            // 使用膨胀操作扩展边缘
-            var dilatedEdges = new Mat();
-            var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3)); // 膨胀区域3x3 pixel
-            Cv2.Dilate(edges, dilatedEdges, kernel, iterations: 2); // 膨胀操作，扩展边缘，扩展迭代2次
-
-            // 使用腐蚀操作细化边缘
-            var erodedEdges = new Mat();
-            Cv2.Erode(dilatedEdges, erodedEdges, kernel, iterations: 1); // 腐蚀操作，细化边缘， 迭代1次
-
-            // 将颜色分割掩码和边缘检测结果结合起来
-            var finalMask = new Mat();
-            Cv2.BitwiseAnd(objectMask, erodedEdges, finalMask);
-
-            // 根据最终合并结果查找物体轮廓
-            Cv2.FindContours(mask, out var contours, // 找到的轮廓
-                out _, // 轮廓层次信息
-                RetrievalModes.External, // 只检索最外侧轮廓
-                ContourApproximationModes.ApproxSimple // 简单轮廓近似模式
-            );
-
-            // 创建一个与background相同大小的掩码
-            var overlayMask = new Mat(_image.Size(), MatType.CV_8UC1, Scalar.All(0));
-
-            // 将找到的overlay轮廓绘制到掩码上，之后用于覆盖到background区域定位
-            Cv2.DrawContours(overlayMask, contours, 0, Scalar.White, -1,
-                LineTypes.AntiAlias, // 抗锯齿线条
-                null,
-                1 // 轮廓级别，1=只画最外侧线条
-            );
-
-            // 将overlay图像复制到background上，只覆盖抠出来的轮廓内的像素
-            overlayImage.CopyTo(_image, overlayMask);
+            _foregroundImage = _foregroundImage.Resize(new OpenCvSharp.Size(newWidth, newHeight));
             return this;
         }
 
         public IImageProcessor CropRectangle(int startX, int startY, int width, int height)
         {
-            // 确保裁切区域在图像范围内
-            var endX = Math.Min(startX + width, _image.Width);
-            var endY = Math.Min(startY + height, _image.Height);
+            if (_foregroundImage == null)
+            {
+                throw new InvalidOperationException("Foreground image is not loaded.");
+            }
 
-            // 裁切图像
-            _image = new Mat(_image, new Rect(startX, startY, endX - startX, endY - startY));
+            _foregroundImage = _foregroundImage.SubMat(startY, startY + height, startX, startX + width);
             return this;
+        }
+
+        public IImageProcessor Rotate(double angle)
+        {
+            if (_foregroundImage == null)
+            {
+                throw new InvalidOperationException("Foreground image is not loaded.");
+            }
+
+            // 确保输入图像为 BGRA，不是则转换
+            var bgraImage = _foregroundImage.Channels() == 3 ? ConvertBgrToBgra(_foregroundImage) : _foregroundImage;
+
+
+            // 计算旋转中心点
+            var center = new Point2f((float)(_foregroundImage.Cols / 2.0), (float)(_foregroundImage.Rows / 2.0));
+
+            // 获取旋转矩阵
+            var rotationMatrix = Cv2.GetRotationMatrix2D(center, angle, 1.0);
+
+            // 计算旋转后的图像尺寸
+            var radians = angle * Math.PI / 180.0; // 将角度转换为弧度
+            var sin = Math.Abs(Math.Sin(radians)); // 计算正弦值的绝对值
+            var cos = Math.Abs(Math.Cos(radians)); // 计算余弦值的绝对值
+
+            // 适当放大尺寸以防止边缘裁切
+            var newWidth = (int)(Math.Ceiling(_foregroundImage.Cols * cos + _foregroundImage.Rows * sin));
+            var newHeight = (int)(Math.Ceiling(_foregroundImage.Cols * sin + _foregroundImage.Rows * cos));
+
+            // 调整旋转矩阵以包含平移部分
+            // 调整旋转矩阵的平移部分，以确保旋转后的图像居中
+            rotationMatrix.Set(0, 2, rotationMatrix.Get<double>(0, 2) + (newWidth / 2.0 - center.X));
+            rotationMatrix.Set(1, 2, rotationMatrix.Get<double>(1, 2) + (newHeight / 2.0 - center.Y));
+
+            // 创建一个新的 Mat 用于存储旋转后的图像
+            var rotatedImage = new Mat(new OpenCvSharp.Size(newWidth, newHeight), MatType.CV_8UC4, Scalar.All(0));
+
+            // 执行旋转操作，使用完全透明的填充
+            Cv2.WarpAffine(bgraImage, rotatedImage, rotationMatrix,
+                new OpenCvSharp.Size(newWidth, newHeight),
+                InterpolationFlags.Linear, BorderTypes.Constant,
+                Scalar.All(0) // 填充全透明
+            );
+            rotationMatrix.Dispose();
+            // 更新前景图
+            _foregroundImage.Dispose();
+            _foregroundImage = rotatedImage;
+            return this;
+        }
+
+
+        public Mat GetMat()
+        {
+            if (_foregroundImage != null)
+            {
+                Overlay();
+            }
+            else
+            {
+                _processedImage = _backgroundImage;
+            }
+
+            return _processedImage;
         }
 
         public Bitmap GetBitmap()
         {
-            return _image.ToBitmap();
+            return GetMat().ToBitmap();
         }
 
-        public Mat GetMat()
+        private static Mat ConvertBgrToBgra(Mat bgrImage)
         {
-            return _image;
+            // 创建一个新的 Mat 用于存储 BGRA 图像
+            var bgraImage = new Mat(bgrImage.Size(), MatType.CV_8UC4);
+
+            // 将 BGR 图像转换为 BGRA 图像
+            Cv2.CvtColor(bgrImage, bgraImage, ColorConversionCodes.BGR2BGRA);
+
+            return bgraImage;
         }
     }
 }
