@@ -180,7 +180,9 @@ namespace ImageProcessor
 
         public Bitmap GetBitmap()
         {
-            return GetMat().ToBitmap();
+            var bitmap =  GetMat().ToBitmap();
+            GC.Collect();  // 诡异的内存占用问题解决了
+            return bitmap;
         }
 
         private static Mat ConvertBgrToBgra(Mat bgrImage)
